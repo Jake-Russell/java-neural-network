@@ -79,7 +79,7 @@ public class NeuralNetwork {
     calculateOutput(inputs);
   }
 
-  public void train(List<TrainingData> trainingDataList, List<TrainingData> verificationDataList) {
+  public void train(List<CatchmentArea> trainingDataList, List<CatchmentArea> verificationDataList) {
 
     Integer iterationCount = 0;
 
@@ -93,7 +93,7 @@ public class NeuralNetwork {
         iterationCount++;
 
         // use all training data values
-        for (TrainingData trainingData : trainingDataList) {
+        for (CatchmentArea trainingData : trainingDataList) {
 
           // forward pass
           calculateOutput(new Integer[] { trainingData.getInput1(), trainingData.getInput2() });
