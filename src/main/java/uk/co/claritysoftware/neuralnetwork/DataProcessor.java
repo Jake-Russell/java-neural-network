@@ -1,7 +1,6 @@
 package uk.co.claritysoftware.neuralnetwork;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -56,7 +55,6 @@ public class DataProcessor {
         System.out.println(csvData.size() + " data points remaining.");
 
 
-
         dataProcessor.calculateMinMaxValues(csvData);
         dataProcessor.calculateStandardisedValues(csvData);
 
@@ -64,8 +62,49 @@ public class DataProcessor {
         dataProcessor.validationData = dataProcessor.validationData(csvData);
         dataProcessor.testData = dataProcessor.testData(csvData);
 
-        NeuralNetwork network = new NeuralNetwork(8, 4);
+        NeuralNetwork network = new NeuralNetwork(8, 6,0.2);
         network.train(dataProcessor.trainingData, dataProcessor.validationData);
+
+        //double output = network.predict(dataProcessor.testData.get(20));
+        //System.out.println("Prediction is " + destandardizedValue(output, dataProcessor.minIndexFlood, dataProcessor.maxIndexFlood) + ", expected was " + destandardizedValue(dataProcessor.testData.get(20).getIndexFlood(), dataProcessor.minIndexFlood, dataProcessor.maxIndexFlood));
+
+        List<Double> networkPredictions = new ArrayList<>();
+        for (CatchmentArea catchmentArea : dataProcessor.testData){
+            double output = network.predict(catchmentArea);
+            networkPredictions.add(output);
+        }
+
+        try{
+            File csvFile = new File("networkPredictions.csv");
+            PrintWriter out = new PrintWriter(csvFile);
+            double squaredError = 0.0;
+            double squaredErrorStandardised = 0.0;
+            for(int i=0; i<networkPredictions.size(); i++){
+                double expectedValue = destandardizedValue(dataProcessor.testData.get(i).getIndexFlood(), dataProcessor.minIndexFlood, dataProcessor.maxIndexFlood);
+                double predictedValue = destandardizedValue(networkPredictions.get(i), dataProcessor.minIndexFlood, dataProcessor.maxIndexFlood);
+                double expectedValueStandardised = dataProcessor.testData.get(i).getIndexFlood();
+                double predictedValueStandardised = networkPredictions.get(i);
+                squaredError = squaredError + Math.pow(expectedValue - predictedValue, 2);
+                squaredErrorStandardised = squaredErrorStandardised + Math.pow(expectedValueStandardised - predictedValueStandardised, 2);
+
+                out.println(expectedValue + ", " + predictedValue);
+            }
+            out.close();
+
+            Double rootMeanSquaredError = Math.sqrt(squaredError / networkPredictions.size());
+            Double meanSquaredError = (squaredError / networkPredictions.size());
+
+            Double rootMeanSquaredErrorStandardised = Math.sqrt(squaredErrorStandardised / networkPredictions.size());
+
+            System.out.println("RMSE " + rootMeanSquaredError);
+            //System.out.println("RMSE Standardised " + rootMeanSquaredErrorStandardised);
+            //System.out.println("MSE " + meanSquaredError);
+
+
+        } catch (FileNotFoundException e){
+            System.out.println("File not found");
+        }
+
     }
 
 
@@ -357,6 +396,10 @@ public class DataProcessor {
         return allData.stream()
                 .skip((long)(allData.size()*0.8)).limit((long) (allData.size()*0.2))
                 .collect(Collectors.toList());
+    }
+
+    private static double destandardizedValue(double value, double rangeMin, double rangeMax) {
+        return (((value - 0.1) / 0.8) * (rangeMax - rangeMin)) + rangeMin;
     }
 }
 

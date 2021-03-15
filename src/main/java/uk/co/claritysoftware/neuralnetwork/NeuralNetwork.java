@@ -1,16 +1,20 @@
 package uk.co.claritysoftware.neuralnetwork;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Stream;
 
 public class NeuralNetwork {
 
   private static final Random RANDOM = new Random();
-  private static final Double LEARNING_RATE = 0.1;
 
   private Integer numberOfInputs;
   private Integer numberOfHiddenLayers;
+  private Double learningRate;
 
   private Double[][] inputsToHiddenLayerWeighting;
 
@@ -22,47 +26,14 @@ public class NeuralNetwork {
 
   private Double outputLayerBias;
 
-  private Double standardizedOutput;
-  private Double deStandardizedOutput;
+  private Double output;
   private Double outputDelta;
 
-  private Integer[] inputMins;
-  private Integer[] inputMaxs;
-  private Integer expectedMin;
-  private Integer expectedMax;
 
-  public static void main(String[] args) {
-
-    NeuralNetwork network = new NeuralNetwork(2, 2);
-
-    List<TrainingData> trainingDataList = new ArrayList<>();
-    for (int n = 0; n < 300; n++) {
-      Integer input1 = RANDOM.nextInt(100) + 1;
-      Integer input2 = RANDOM.nextInt(100) + 1;
-      Integer expectedOutput = input1 + input2;
-      trainingDataList.add(new TrainingData(input1, input2, expectedOutput));
-    }
-    List<TrainingData> validationDataList = new ArrayList<>();
-    for (int n = 0; n < 100; n++) {
-      Integer input1 = RANDOM.nextInt(100) + 1;
-      Integer input2 = RANDOM.nextInt(100) + 1;
-      Integer expectedOutput = input1 + input2;
-      validationDataList.add(new TrainingData(input1, input2, expectedOutput));
-    }
-    List<TrainingData> allData = new ArrayList<>(trainingDataList);
-    allData.addAll(validationDataList);
-    network.calculateMinsAndMaxes(allData);
-
-    network.train(trainingDataList, validationDataList);
-
-    network.predict(new Integer[] {13, 4});
-    System.out.println("Prediction: " + network.deStandardizedOutput);
-
-  }
-
-  public NeuralNetwork(Integer numberOfInputs, Integer numberOfHiddenLayers) {
+  public NeuralNetwork(Integer numberOfInputs, Integer numberOfHiddenLayers, Double learningRate) {
     this.numberOfInputs = numberOfInputs;
     this.numberOfHiddenLayers = numberOfHiddenLayers;
+    this.learningRate = learningRate;
 
     this.inputsToHiddenLayerWeighting = inputsToHiddenLayerWeighting();
 
@@ -75,33 +46,41 @@ public class NeuralNetwork {
     this.hiddenLayerDeltas = new Double[numberOfHiddenLayers];
   }
 
-  public void predict(Integer[] inputs) {
-    calculateOutput(inputs);
+  public double predict(CatchmentArea testData) {
+    calculateOutput(new Double[] { testData.getArea(), testData.getBaseFlowIndex(), testData.getFloodAttenuation(), testData.getFloodPlainExtent(),
+            testData.getLongestDrainagePath(), testData.getProportionWetDays(), testData.getMedianAnnualMax1DayRainfall(), testData.getStandardAnnualAverageRainfall() });
+    return output;
   }
 
   public void train(List<CatchmentArea> trainingDataList, List<CatchmentArea> verificationDataList) {
 
-    Integer iterationCount = 0;
+    Integer epochCount = 0;
+    List<Double> meanSquaredErrorData = new ArrayList<>();
+    List<Integer> epochNumberData = new ArrayList<>();
+    List<String[]> networkPerformanceData = new ArrayList<>();
 
     boolean carryOnTraining = true;
     Double previousRootMeanSquaredError = Double.MAX_VALUE;
 
     while(carryOnTraining) {
+    //while(epochCount<=30000) {
 
-
-      for (int i = 0; i < 500; i++) {
-        iterationCount++;
+        for (int i = 0; i < 500; i++) {
+        epochCount++;
 
         // use all training data values
         for (CatchmentArea trainingData : trainingDataList) {
 
           // forward pass
-          calculateOutput(new Integer[] { trainingData.getInput1(), trainingData.getInput2() });
-          calculateOutputDelta(trainingData.getExpectedOutput());
+          calculateOutput(new Double[] { trainingData.getArea(), trainingData.getBaseFlowIndex(), trainingData.getFloodAttenuation(), trainingData.getFloodPlainExtent(),
+                  trainingData.getLongestDrainagePath(), trainingData.getProportionWetDays(), trainingData.getMedianAnnualMax1DayRainfall(), trainingData.getStandardAnnualAverageRainfall() });
+          calculateOutputDelta(trainingData.getIndexFlood());
           calculateHiddenLayerDeltas();
 
           // reverse pass
-          this.inputsToHiddenLayerWeighting = recalculateInputsToHiddenLayerWeighting(new Integer[] { trainingData.getInput1(), trainingData.getInput2() });
+          this.inputsToHiddenLayerWeighting = recalculateInputsToHiddenLayerWeighting(new Double[] { trainingData.getArea(), trainingData.getBaseFlowIndex(), trainingData.getFloodAttenuation(),
+                  trainingData.getFloodPlainExtent(), trainingData.getLongestDrainagePath(), trainingData.getProportionWetDays(), trainingData.getMedianAnnualMax1DayRainfall(),
+                  trainingData.getStandardAnnualAverageRainfall() });
           this.hiddenLayerBiases = recalculateHiddenLayerBiases();
           this.hiddenLayersToOutputWeighting = recalculateHiddenLayersToOutputWeighting();
           this.outputLayerBias = recalculateOutputLayerBias();
@@ -110,70 +89,49 @@ public class NeuralNetwork {
 
       // run all verification values through
       Double squaredError = 0.0;
-      for (TrainingData verificationData : verificationDataList) {
+      for (CatchmentArea verificationData : verificationDataList) {
 
         // forward pass
-        calculateOutput(new Integer[] { verificationData.getInput1(), verificationData.getInput2() });
-        calculateOutputDelta(verificationData.getExpectedOutput());
-        calculateHiddenLayerDeltas();
+        calculateOutput(new Double[] { verificationData.getArea(), verificationData.getBaseFlowIndex(), verificationData.getFloodAttenuation(), verificationData.getFloodPlainExtent(),
+                verificationData.getLongestDrainagePath(), verificationData.getProportionWetDays(), verificationData.getMedianAnnualMax1DayRainfall(), verificationData.getStandardAnnualAverageRainfall() });
 
-        // reverse pass
-        this.inputsToHiddenLayerWeighting = recalculateInputsToHiddenLayerWeighting(new Integer[] { verificationData.getInput1(), verificationData.getInput2() });
-        this.hiddenLayerBiases = recalculateHiddenLayerBiases();
-        this.hiddenLayersToOutputWeighting = recalculateHiddenLayersToOutputWeighting();
-        this.outputLayerBias = recalculateOutputLayerBias();
+        squaredError = squaredError + Math.pow(verificationData.getIndexFlood() - output, 2);
 
-        deStandardizedOutput = destandardizedValue(standardizedOutput, expectedMin, expectedMax);
 
-        squaredError = squaredError + Math.pow(verificationData.getExpectedOutput() - deStandardizedOutput, 2);
       }
 
       //System.out.println("SE " + squaredError);
       Double rootMeanSquaredError = Math.sqrt(squaredError / verificationDataList.size());
-      //System.out.println("RMSE " + rootMeanSquaredError);
+      Double meanSquaredError = squaredError / verificationDataList.size();
+      System.out.println("MSE of Validation Data is " + meanSquaredError);
+      System.out.println("RMSE of Validation Data is " + rootMeanSquaredError);
+      meanSquaredErrorData.add(rootMeanSquaredError);
+      epochNumberData.add(epochCount);
+
+
+
+
       if (rootMeanSquaredError > previousRootMeanSquaredError) {
         carryOnTraining = false;
       } else {
         previousRootMeanSquaredError = rootMeanSquaredError;
       }
-
     }
 
-    System.out.println("Training done with " + iterationCount + " iterations");
+    System.out.println("\nFinished using " + numberOfHiddenLayers + " hidden layers and a learning rate of " + learningRate);
+    System.out.println("Training done with " + epochCount + " epochs");
 
+    try{
+      File csvFile = new File("networkPerformance.csv");
+      PrintWriter out = new PrintWriter(csvFile);
+      for(int i=0; i<meanSquaredErrorData.size(); i++){
+        out.println(epochNumberData.get(i) + ", " + meanSquaredErrorData.get(i));
+      }
+      out.close();
 
-
-
-
-  }
-
-  private void calculateMinsAndMaxes(List<TrainingData> allData) {
-    inputMins = new Integer[numberOfInputs];
-    inputMins[0] = allData.stream()
-      .map(trainingData -> trainingData.getInput1())
-      .min(Integer::compareTo)
-      .orElse(0);
-    inputMins[1] = allData.stream()
-      .map(trainingData -> trainingData.getInput2())
-      .min(Integer::compareTo)
-      .orElse(0);
-    inputMaxs = new Integer[numberOfInputs];
-    inputMaxs[0] = allData.stream()
-      .map(trainingData -> trainingData.getInput1())
-      .max(Integer::compareTo)
-      .orElse(0);
-    inputMaxs[1] = allData.stream()
-      .map(trainingData -> trainingData.getInput2())
-      .max(Integer::compareTo)
-      .orElse(0);
-    expectedMin = allData.stream()
-      .map(trainingData -> trainingData.getExpectedOutput())
-      .min(Integer::compareTo)
-      .orElse(0);
-    expectedMax = allData.stream()
-      .map(trainingData -> trainingData.getExpectedOutput())
-      .max(Integer::compareTo)
-      .orElse(0);
+    } catch (FileNotFoundException e){
+      System.out.println("File not found");
+    }
   }
 
   private void calculateHiddenLayerDeltas() {
@@ -184,21 +142,14 @@ public class NeuralNetwork {
     }
   }
 
-  private void calculateOutputDelta(int expectedValue) {
-    double standardisedExpectedValue = standardizedValue(expectedValue, expectedMin, expectedMax);
-    double firstDifferential = standardizedOutput * (1 - standardizedOutput);
-    outputDelta = (standardisedExpectedValue - standardizedOutput) * firstDifferential;
+  private void calculateOutputDelta(double expectedValue) {
+    double firstDifferential = output * (1 - output);
+    outputDelta = (expectedValue - output) * firstDifferential;
   }
 
-  private void calculateOutput(Integer[] inputs) {
+  private void calculateOutput(Double[] inputs) {
 
-    Double[] standardisedInputs = new Double[numberOfInputs];
-    for (int inputNum = 0; inputNum < numberOfInputs; inputNum++) {
-      Double standardisedValue = standardizedValue(inputs[inputNum], inputMins[inputNum], inputMaxs[inputNum]);
-      standardisedInputs[inputNum] = standardisedValue;
-    }
-
-    calculateHiddenLayerValues(standardisedInputs);
+    calculateHiddenLayerValues(inputs);
 
     Double weightedSum = 0.0;
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
@@ -206,8 +157,7 @@ public class NeuralNetwork {
     }
     weightedSum = weightedSum + outputLayerBias;
 
-    standardizedOutput = sigmoidFunction(weightedSum);
-    deStandardizedOutput = destandardizedValue(standardizedOutput, expectedMin, expectedMax);
+    output = sigmoidFunction(weightedSum);
   }
 
   private void calculateHiddenLayerValues(Double[] inputs) {
@@ -227,9 +177,6 @@ public class NeuralNetwork {
     return 1 / (1 + Math.exp(weightedSum * -1));
   }
 
-  private Double unSigmoidFunction(Double standardizedValue) {
-    return Math.log(standardizedValue / (1 - standardizedValue));
-  }
 
   private Double[] hiddenLayerBiases() {
     Double[] hiddenLayerBiases = new Double[numberOfHiddenLayers];
@@ -245,7 +192,7 @@ public class NeuralNetwork {
     Double[] hiddenLayerBiases = new Double[numberOfHiddenLayers];
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-      Double newBias = this.hiddenLayerBiases[hiddenLayerNum] + (LEARNING_RATE * this.hiddenLayerDeltas[hiddenLayerNum] * 1);
+      Double newBias = this.hiddenLayerBiases[hiddenLayerNum] + (learningRate * this.hiddenLayerDeltas[hiddenLayerNum] * 1);
       hiddenLayerBiases[hiddenLayerNum] = newBias;
     }
 
@@ -258,7 +205,7 @@ public class NeuralNetwork {
   }
 
   private Double recalculateOutputLayerBias() {
-    return outputLayerBias + (LEARNING_RATE * outputDelta * 1);
+    return outputLayerBias + (learningRate * outputDelta * 1);
   }
 
   private Double[][] inputsToHiddenLayerWeighting() {
@@ -271,13 +218,13 @@ public class NeuralNetwork {
     return inputsToHiddenLayerWeighting;
   }
 
-  private Double[][] recalculateInputsToHiddenLayerWeighting(Integer[] inputValues) {
+  private Double[][] recalculateInputsToHiddenLayerWeighting(Double[] inputValues) {
     Double[][] inputsToHiddenLayerWeighting = new Double[numberOfInputs][numberOfHiddenLayers];
 
     for (int inputNum = 0; inputNum < numberOfInputs; inputNum++) {
 
       for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-        Double newWeight = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] + (LEARNING_RATE * hiddenLayerDeltas[hiddenLayerNum] * inputValues[inputNum]);
+        Double newWeight = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] + (learningRate * hiddenLayerDeltas[hiddenLayerNum] * inputValues[inputNum]);
         inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeight;
       }
     }
@@ -299,7 +246,7 @@ public class NeuralNetwork {
     Double[] hiddenLayersToOutputWeighting = new Double[numberOfHiddenLayers];
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-      Double newWeight = this.hiddenLayersToOutputWeighting[hiddenLayerNum] + (LEARNING_RATE * outputDelta * hiddenLayerOutputs[hiddenLayerNum]);
+      Double newWeight = this.hiddenLayersToOutputWeighting[hiddenLayerNum] + (learningRate * outputDelta * hiddenLayerOutputs[hiddenLayerNum]);
       hiddenLayersToOutputWeighting[hiddenLayerNum] = newWeight;
     }
 
@@ -316,19 +263,10 @@ public class NeuralNetwork {
     return  randomWeightings;
   }
 
-  private Double randomNumber(Integer extent) {
-    int min = -2 / extent;
-    int max = 2 / extent;
+  private Double randomNumber(double extent) {
+    double min = -2 / extent;
+    double max = 2 / extent;
     return min + (max - min) * RANDOM.nextDouble();
   }
 
-  private double standardizedValue(int value, int rangeMin, int rangeMax) {
-    return 0.8 * (
-      (double)(value - rangeMin) / (double)(rangeMax - rangeMin)
-    ) + 0.1;
-  }
-
-  private double destandardizedValue(double value, int rangeMin, int rangeMax) {
-    return (((value - 0.1) / 0.8) * (rangeMax - rangeMin)) + rangeMin;
-  }
 }
