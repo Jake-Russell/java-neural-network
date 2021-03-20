@@ -32,7 +32,7 @@ public class DataProcessor {
     public static void main(String[] args) {
         DataProcessor dataProcessor = new DataProcessor();
 
-        String file = "/Users/jake/OneDrive - Loughborough University/COMPUTER SCIENCE AND AI/Part B/Semester 2/AI Methods/Coursework/Coursework-Dataset-Original.csv";
+        String file = "/Users/jake/OneDrive - Loughborough University/COMPUTER SCIENCE AND AI/Part B/Semester 2/AI Methods/NeuralNetworkCoursework/CSV/Coursework_Dataset_Original.csv";
         String delimiter = ",";
 
         List<CatchmentArea> csvData = new ArrayList<>();
@@ -61,7 +61,7 @@ public class DataProcessor {
 
         /*
         try{
-            File csvFile = new File("cleansedData.csv");
+            File csvFile = new File("CSV/Cleansed_Data.csv");
             PrintWriter out = new PrintWriter(csvFile);
             out.println("AREA, BFIHOST, FARL, FPEXT, LDP, PROPWET, RMED-1D, SAAR, INDEX FLOOD");
             for(int i=0; i<csvData.size(); i++){
@@ -122,7 +122,7 @@ public class DataProcessor {
             }
 
             try {
-                File csvFile = new File("networkPredictions.csv");
+                File csvFile = new File("CSV/Network_Predictions.csv");
                 PrintWriter out = new PrintWriter(csvFile);
                 for (int j = 0; j < networkPredictions.size(); j++) {
                     double expectedValue = destandardisedValue(dataProcessor.testData.get(j).getIndexFlood(), dataProcessor.minIndexFlood, dataProcessor.maxIndexFlood);
@@ -199,7 +199,7 @@ public class DataProcessor {
                         String line = ("\n" + numberOfHiddenLayers + ", " + learningRate + ", " + activationFunctions.toString() + ", " + rootMeanSquaredErrors.get(0) + ", " + rootMeanSquaredErrors.get(1) + ", " + rootMeanSquaredErrors.get(2)
                                 + ", " + (rootMeanSquaredErrors.get(0) + rootMeanSquaredErrors.get(1) + rootMeanSquaredErrors.get(2)) / 3);
 
-                        Files.write(Paths.get("networkConfigurationsFull2.csv"), line.getBytes(), StandardOpenOption.APPEND);
+                        Files.write(Paths.get("CSV/Network_Configurations_Full.csv"), line.getBytes(), StandardOpenOption.APPEND);
 
                     } catch (FileNotFoundException e) {
                         System.out.println("File not found");

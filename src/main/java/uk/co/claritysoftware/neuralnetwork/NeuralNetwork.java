@@ -14,7 +14,7 @@ public class NeuralNetwork {
   private Integer numberOfInputs;
   private Integer numberOfHiddenLayers;
   private Double learningRate;
-  private Double momentumTerm;
+  private Double momentumTerm = 0.9;
   private ActivationFunctions activationFunctions;
 
   private Double[][] inputsToHiddenLayerWeighting;
@@ -110,72 +110,17 @@ public class NeuralNetwork {
         squaredError = squaredError + Math.pow(validationData.getIndexFlood() - output, 2);
       }
 
-      //System.out.println("SE " + squaredError);
       Double rootMeanSquaredError = Math.sqrt(squaredError / validationDataList.size());
-      Double meanSquaredError = squaredError / validationDataList.size();
-      // System.out.println("MSE of Validation Data is " + meanSquaredError);
-      // System.out.println("RMSE of Validation Data is " + rootMeanSquaredError);
       meanSquaredErrorData.add(rootMeanSquaredError);
       epochNumberData.add(epochCount);
 
 
       if (rootMeanSquaredError > previousRootMeanSquaredError) {
+        double percentageIncrease = 100-(previousRootMeanSquaredError/rootMeanSquaredError)*100;
+        System.out.println("Error increased by " + percentageIncrease + " %.");
         carryOnTraining = false;
 
-/*
-        previousRootMeanSquaredError = rootMeanSquaredError;
-        // Test to see if stuck in local minimum
-
-        for(int j = 0; j < 50; j++){
-          for (int i = 0; i < 500; i++) {
-            epochCount++;
-            // use all training data values
-            for (CatchmentArea trainingData : trainingDataList) {
-              // forward pass
-              calculateOutput(new Double[] { trainingData.getArea(), trainingData.getBaseFlowIndex(), trainingData.getFloodAttenuation(), trainingData.getFloodPlainExtent(),
-                      trainingData.getLongestDrainagePath(), trainingData.getProportionWetDays(), trainingData.getMedianAnnualMax1DayRainfall(), trainingData.getStandardAnnualAverageRainfall() });
-
-
-              // reverse pass
-              calculateOutputDelta(trainingData.getIndexFlood());
-              calculateHiddenLayerDeltas();
-              this.inputsToHiddenLayerWeighting = recalculateInputsToHiddenLayerWeighting(new Double[] { trainingData.getArea(), trainingData.getBaseFlowIndex(), trainingData.getFloodAttenuation(),
-                      trainingData.getFloodPlainExtent(), trainingData.getLongestDrainagePath(), trainingData.getProportionWetDays(), trainingData.getMedianAnnualMax1DayRainfall(),
-                      trainingData.getStandardAnnualAverageRainfall() });
-              this.hiddenLayerBiases = recalculateHiddenLayerBiases();
-              this.hiddenLayerToOutputWeighting = recalculateHiddenLayersToOutputWeighting();
-              this.outputLayerBias = recalculateOutputLayerBias();
-            }
-          }
-          // run all validation values through
-          squaredError = 0.0;
-          for (CatchmentArea validationData : validationDataList) {
-
-            // forward pass
-            calculateOutput(new Double[] { validationData.getArea(), validationData.getBaseFlowIndex(), validationData.getFloodAttenuation(), validationData.getFloodPlainExtent(),
-                    validationData.getLongestDrainagePath(), validationData.getProportionWetDays(), validationData.getMedianAnnualMax1DayRainfall(), validationData.getStandardAnnualAverageRainfall() });
-
-            squaredError = squaredError + Math.pow(validationData.getIndexFlood() - output, 2);
-          }
-
-          //System.out.println("SE " + squaredError);
-          rootMeanSquaredError = Math.sqrt(squaredError / validationDataList.size());
-          meanSquaredError = squaredError / validationDataList.size();
-          // System.out.println("MSE of Validation Data is " + meanSquaredError);
-          // System.out.println("RMSE of Validation Data is " + rootMeanSquaredError);
-          meanSquaredErrorData.add(rootMeanSquaredError);
-          epochNumberData.add(epochCount);
-        }
-
-
-        if(rootMeanSquaredError > previousRootMeanSquaredError){
-          carryOnTraining = false;
-        }
-*/
-
-      }
-
-      else {
+      } else {
         previousRootMeanSquaredError = rootMeanSquaredError;
       }
     }
@@ -187,19 +132,19 @@ public class NeuralNetwork {
             "\n  - Activation Function = " + this.activationFunctions.toString());
 
     try{
-      File csvFile = new File("networkPerformance.csv");
-      File csvFile2 = new File("networkPerformanceTraining.csv");
+      File csvFile = new File("CSV/RMSE_Validation_Dataset.csv");
+      File csvFileTraining = new File("CSV/RMSE_Training_Dataset.csv");
       PrintWriter out = new PrintWriter(csvFile);
-      PrintWriter out2 = new PrintWriter(csvFile2);
+      PrintWriter outTraining = new PrintWriter(csvFileTraining);
       for(int i=0; i<meanSquaredErrorData.size(); i++){
         out.println(epochNumberData.get(i) + ", " + meanSquaredErrorData.get(i));
       }
       out.close();
 
       for(int i=0; i<meanSquaredErrorDataTraining.size(); i++){
-        out2.println(epochNumberData.get(i) + ", " + meanSquaredErrorDataTraining.get(i));
+        outTraining.println(epochNumberData.get(i) + ", " + meanSquaredErrorDataTraining.get(i));
       }
-      out2.close();
+      outTraining.close();
 
 
     } catch (FileNotFoundException e){
@@ -331,7 +276,9 @@ public class NeuralNetwork {
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
       Double newBias = this.hiddenLayerBiases[hiddenLayerNum] + (learningRate * this.hiddenLayerDeltas[hiddenLayerNum] * 1);
-      hiddenLayerBiases[hiddenLayerNum] = newBias;
+      Double biasDifference = newBias - this.hiddenLayerBiases[hiddenLayerNum];
+      Double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
+      hiddenLayerBiases[hiddenLayerNum] = newBiasWithMomentum;
     }
 
     return hiddenLayerBiases;
@@ -343,7 +290,10 @@ public class NeuralNetwork {
   }
 
   private Double recalculateOutputLayerBias() {
-    return outputLayerBias + (learningRate * outputDelta * 1);
+    Double newBias = outputLayerBias + (learningRate * outputDelta * 1);
+    Double biasDifference = newBias - outputLayerBias;
+    Double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
+    return newBiasWithMomentum;
   }
 
   private Double[][] inputsToHiddenLayerWeighting() {
@@ -363,7 +313,9 @@ public class NeuralNetwork {
 
       for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
         Double newWeight = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] + (learningRate * hiddenLayerDeltas[hiddenLayerNum] * inputValues[inputNum]);
-        inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeight;
+        Double weightDifference = newWeight - this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum];
+        Double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
+        inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeightWithMomentum;
       }
     }
 
@@ -385,7 +337,9 @@ public class NeuralNetwork {
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
       Double newWeight = this.hiddenLayerToOutputWeighting[hiddenLayerNum] + (learningRate * outputDelta * hiddenLayerOutputs[hiddenLayerNum]);
-      hiddenLayersToOutputWeighting[hiddenLayerNum] = newWeight;
+      Double weightDifference = newWeight - hiddenLayerToOutputWeighting[hiddenLayerNum];
+      Double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
+      hiddenLayersToOutputWeighting[hiddenLayerNum] = newWeightWithMomentum;
     }
 
     return hiddenLayersToOutputWeighting;
