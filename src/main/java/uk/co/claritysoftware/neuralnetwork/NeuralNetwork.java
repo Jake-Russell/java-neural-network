@@ -13,19 +13,23 @@ public class NeuralNetwork {
 
   private Integer numberOfInputs;
   private Integer numberOfHiddenLayers;
-  private Double learningRate;
-  private Double momentumTerm = 0.9;
+  private double learningRate;
+  private double momentumTerm = 0.9;
   private ActivationFunctions activationFunctions;
 
   private Double[][] inputsToHiddenLayerWeighting;
+  private Double[][] previousInputsToHiddenLayerWeighting;
 
   private Double[] hiddenLayerBiases;
+  private Double[] previousHiddenLayerBiases;
   private Double[] hiddenLayerToOutputWeighting;
+  private Double[] previousHiddenLayerToOutputWeighting;
 
   private Double[] hiddenLayerOutputs;
   private Double[] hiddenLayerDeltas;
 
   private Double outputLayerBias;
+  private Double previousOutputLayerBias;
 
   private Double output;
   private Double outputDelta;
@@ -38,9 +42,12 @@ public class NeuralNetwork {
     this.activationFunctions = activationFunctions;
 
     this.inputsToHiddenLayerWeighting = inputsToHiddenLayerWeighting();
+    this.previousInputsToHiddenLayerWeighting = new Double[numberOfInputs][numberOfHiddenLayers];
 
     this.hiddenLayerBiases = hiddenLayerBiases();
+    this.previousHiddenLayerBiases = new Double[numberOfHiddenLayers];
     this.hiddenLayerToOutputWeighting = hiddenLayerToOutputWeighting();
+    this.previousHiddenLayerToOutputWeighting = new Double[numberOfHiddenLayers];
 
     this.outputLayerBias = outputLayerBias();
 
@@ -60,14 +67,16 @@ public class NeuralNetwork {
     List<Double> meanSquaredErrorData = new ArrayList<>();
     List<Double> meanSquaredErrorDataTraining = new ArrayList<>();
     List<Integer> epochNumberData = new ArrayList<>();
-    List<String[]> networkPerformanceData = new ArrayList<>();
+    List<Double> learningRateData = new ArrayList<>();
 
     boolean carryOnTraining = true;
-    Double previousRootMeanSquaredError = Double.MAX_VALUE;
+    double startingLearningRate = this.learningRate;
+    double endingLearningRate = 0.01;
+    double previousRootMeanSquaredError = Double.MAX_VALUE;
 
-    Double squaredErrorTraining = 0.0;
-    while(carryOnTraining) {
-    //while(epochCount<50000) {
+    double squaredErrorTraining = 0.0;
+    //while(carryOnTraining) {
+    while(epochCount<10000) {
 
       for (int i = 0; i < 500; i++) {
         epochCount++;
@@ -95,12 +104,12 @@ public class NeuralNetwork {
           this.outputLayerBias = recalculateOutputLayerBias();
         }
       }
-      Double rootMeanSquaredErrorTraining = Math.sqrt(squaredErrorTraining / trainingDataList.size());
+      double rootMeanSquaredErrorTraining = Math.sqrt(squaredErrorTraining / trainingDataList.size());
       meanSquaredErrorDataTraining.add(rootMeanSquaredErrorTraining);
 
 
       // run all validation values through
-      Double squaredError = 0.0;
+      double squaredError = 0.0;
       for (CatchmentArea validationData : validationDataList) {
 
         // forward pass
@@ -110,18 +119,47 @@ public class NeuralNetwork {
         squaredError = squaredError + Math.pow(validationData.getIndexFlood() - output, 2);
       }
 
-      Double rootMeanSquaredError = Math.sqrt(squaredError / validationDataList.size());
+      double rootMeanSquaredError = Math.sqrt(squaredError / validationDataList.size());
       meanSquaredErrorData.add(rootMeanSquaredError);
       epochNumberData.add(epochCount);
 
+      //this.learningRate = endingLearningRate + (startingLearningRate - endingLearningRate) * (1 - (1 / (1 + Math.exp(10 - ((20 * epochCount) / 10000)))));
+      learningRateData.add(this.learningRate);
+
 
       if (rootMeanSquaredError > previousRootMeanSquaredError) {
-        double percentageIncrease = 100-(previousRootMeanSquaredError/rootMeanSquaredError)*100;
-        System.out.println("Error increased by " + percentageIncrease + " %.");
-        carryOnTraining = false;
+        double rootMeanSquaredErrorDifference = rootMeanSquaredError - previousRootMeanSquaredError;
+        double rootMeanSquaredErrorPercentageIncrease = (rootMeanSquaredErrorDifference/previousRootMeanSquaredError) * 100;
+
+/*
+  BOLD DRIVER ALGORITHM
+
+        if(rootMeanSquaredErrorPercentageIncrease > 2){
+          //System.out.println("RMSE increased by more than 2%.");
+          if(this.learningRate * 0.7 > 0.01){
+            this.undoWeightChange();
+            this.learningRate = this.learningRate * 0.7;
+            System.out.println("Now DECREASING the learning rate to " + this.learningRate);
+          } else {
+            System.out.println("Cannot DECREASE the learning rate anymore, since it is already " + this.learningRate);
+            carryOnTraining = false;
+          }
+        } else{
+          System.out.println("NOT changing learning rate, since percentage increase was too small - " + rootMeanSquaredErrorPercentageIncrease);
+          carryOnTraining = false;
+        }
+
 
       } else {
         previousRootMeanSquaredError = rootMeanSquaredError;
+        if(this.learningRate * 1.05 < 0.5){
+          this.learningRate = this.learningRate * 1.05;
+          System.out.println("Now INCREASING the learning rate to " + this.learningRate);
+        }
+        else{
+          System.out.println("Cannot INCREASE the learning rate anymore, since it is already " + this.learningRate);
+        }
+ */
       }
     }
 
@@ -134,8 +172,11 @@ public class NeuralNetwork {
     try{
       File csvFile = new File("CSV/RMSE_Validation_Dataset.csv");
       File csvFileTraining = new File("CSV/RMSE_Training_Dataset.csv");
+      File csvFileLearningRate = new File("CSV/Learning_Rate_Change.csv");
       PrintWriter out = new PrintWriter(csvFile);
       PrintWriter outTraining = new PrintWriter(csvFileTraining);
+      PrintWriter outLearningRate = new PrintWriter(csvFileLearningRate);
+
       for(int i=0; i<meanSquaredErrorData.size(); i++){
         out.println(epochNumberData.get(i) + ", " + meanSquaredErrorData.get(i));
       }
@@ -146,10 +187,22 @@ public class NeuralNetwork {
       }
       outTraining.close();
 
+      for(int i=0; i<learningRateData.size(); i++){
+        outLearningRate.println(epochNumberData.get(i) + ", " + learningRateData.get(i));
+      }
+      outLearningRate.close();
 
     } catch (FileNotFoundException e){
       System.out.println("File not found");
     }
+  }
+
+
+  private void undoWeightChange(){
+    this.inputsToHiddenLayerWeighting = this.previousInputsToHiddenLayerWeighting;
+    this.hiddenLayerBiases = this.previousHiddenLayerBiases;
+    this.hiddenLayerToOutputWeighting = this.previousHiddenLayerToOutputWeighting;
+    this.outputLayerBias = this.previousOutputLayerBias;
   }
 
   private void calculateHiddenLayerDeltas() {
@@ -275,14 +328,14 @@ public class NeuralNetwork {
     Double[] hiddenLayerBiases = new Double[numberOfHiddenLayers];
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-      Double newBias = this.hiddenLayerBiases[hiddenLayerNum] + (learningRate * this.hiddenLayerDeltas[hiddenLayerNum] * 1);
-      Double biasDifference = newBias - this.hiddenLayerBiases[hiddenLayerNum];
-      Double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
-      hiddenLayerBiases[hiddenLayerNum] = newBiasWithMomentum;
+      double newBias = this.hiddenLayerBiases[hiddenLayerNum] + (learningRate * this.hiddenLayerDeltas[hiddenLayerNum] * 1);
+      double biasDifference = newBias - this.hiddenLayerBiases[hiddenLayerNum];
+      double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
+      this.previousHiddenLayerBiases[hiddenLayerNum] = this.hiddenLayerBiases[hiddenLayerNum];
+      //hiddenLayerBiases[hiddenLayerNum] = newBiasWithMomentum;
+      hiddenLayerBiases[hiddenLayerNum] = newBias;
     }
-
     return hiddenLayerBiases;
-
   }
 
   private Double outputLayerBias() {
@@ -290,10 +343,13 @@ public class NeuralNetwork {
   }
 
   private Double recalculateOutputLayerBias() {
-    Double newBias = outputLayerBias + (learningRate * outputDelta * 1);
-    Double biasDifference = newBias - outputLayerBias;
-    Double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
-    return newBiasWithMomentum;
+    double newBias = outputLayerBias + (learningRate * outputDelta * 1);
+    double biasDifference = newBias - this.outputLayerBias;
+    this.previousOutputLayerBias = this.outputLayerBias;
+    double newBiasWithMomentum = newBias + (momentumTerm * biasDifference);
+    //return newBiasWithMomentum;
+    return newBias;
+
   }
 
   private Double[][] inputsToHiddenLayerWeighting() {
@@ -302,7 +358,6 @@ public class NeuralNetwork {
     for (int inputNum = 0; inputNum < numberOfInputs; inputNum++) {
       inputsToHiddenLayerWeighting[inputNum] = randomWeightings();
     }
-
     return inputsToHiddenLayerWeighting;
   }
 
@@ -312,10 +367,12 @@ public class NeuralNetwork {
     for (int inputNum = 0; inputNum < numberOfInputs; inputNum++) {
 
       for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-        Double newWeight = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] + (learningRate * hiddenLayerDeltas[hiddenLayerNum] * inputValues[inputNum]);
-        Double weightDifference = newWeight - this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum];
-        Double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
-        inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeightWithMomentum;
+        double newWeight = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] + (learningRate * hiddenLayerDeltas[hiddenLayerNum] * inputValues[inputNum]);
+        double weightDifference = newWeight - this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum];
+        double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
+        this.previousInputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = this.inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum];
+        //inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeightWithMomentum;
+        inputsToHiddenLayerWeighting[inputNum][hiddenLayerNum] = newWeight;
       }
     }
 
@@ -333,16 +390,18 @@ public class NeuralNetwork {
   }
 
   private Double[] recalculateHiddenLayersToOutputWeighting() {
-    Double[] hiddenLayersToOutputWeighting = new Double[numberOfHiddenLayers];
+    Double[] hiddenLayerToOutputWeighting = new Double[numberOfHiddenLayers];
 
     for (int hiddenLayerNum = 0; hiddenLayerNum < numberOfHiddenLayers; hiddenLayerNum++) {
-      Double newWeight = this.hiddenLayerToOutputWeighting[hiddenLayerNum] + (learningRate * outputDelta * hiddenLayerOutputs[hiddenLayerNum]);
-      Double weightDifference = newWeight - hiddenLayerToOutputWeighting[hiddenLayerNum];
-      Double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
-      hiddenLayersToOutputWeighting[hiddenLayerNum] = newWeightWithMomentum;
+      double newWeight = this.hiddenLayerToOutputWeighting[hiddenLayerNum] + (learningRate * outputDelta * hiddenLayerOutputs[hiddenLayerNum]);
+      double weightDifference = newWeight - this.hiddenLayerToOutputWeighting[hiddenLayerNum];
+      double newWeightWithMomentum = newWeight + (momentumTerm * weightDifference);
+      previousHiddenLayerToOutputWeighting[hiddenLayerNum] = this.hiddenLayerToOutputWeighting[hiddenLayerNum];
+      //hiddenLayerToOutputWeighting[hiddenLayerNum] = newWeightWithMomentum;
+      hiddenLayerToOutputWeighting[hiddenLayerNum] = newWeight;
     }
 
-    return hiddenLayersToOutputWeighting;
+    return hiddenLayerToOutputWeighting;
   }
 
   private Double[] randomWeightings() {
